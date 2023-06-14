@@ -70,6 +70,9 @@ class VideoThread(QThread):
         Signal, which is emitted when the thread is running and the webcam
         snapshot is edited.
 
+    error_signal : pyqtSignal
+        Signal, which is emitted when an error occurs.
+
     Methods
     -------
     init()
