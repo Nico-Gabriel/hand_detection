@@ -22,10 +22,30 @@ import mediapipe as mp
 import numpy as np
 from PyQt6 import QtGui
 from PyQt6.QtCore import QThread, pyqtSignal
-from PyQt6.QtGui import QPixmap
-from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox
+from PyQt6.QtGui import QPixmap, QAction
+from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox, QMenu, QMenuBar
 
 from settings import *
+
+
+def new_file():
+    print("New...")
+
+
+def open_file():
+    print("Open...")
+
+
+def save_file():
+    print("Save...")
+
+
+def save_file_as():
+    print("Save as...")
+
+
+def export_file():
+    print("Export...")
 
 
 def generate_whiteboard(width, height):
@@ -350,8 +370,10 @@ class MainWindow(QWidget):
         Creates the layout of the main window.
     create_options_layout()
         Creates the layout for the options.
+    create_menu_bar()
+        Creates the menu bar.
     update_image(image, image_height, image_width)
-        Updates the image of the webcam video.
+        Updates the virtual drawing board with its content.
     handle_video_thread_errors(error)
         Handles errors that occur in the video thread.
     closeEvent(event)
@@ -371,6 +393,8 @@ class MainWindow(QWidget):
         self.video = QLabel()
         self.video.resize(self.display_width, self.display_height)
         self.create_layout()
+        self.create_menu_bar()
+        self.thread = None
         self.initialize_video_thread()
 
     def initialize_video_thread(self):
@@ -447,9 +471,47 @@ class MainWindow(QWidget):
 
         return options_layout
 
+    def create_menu_bar(self):
+        """
+        Creates the menu bar.
+        """
+
+        new_file_action = QAction("New...", self)
+        new_file_action.setShortcut("Ctrl+N")
+        new_file_action.triggered.connect(new_file)
+
+        open_file_action = QAction("Open...", self)
+        open_file_action.setShortcut("Ctrl+O")
+        open_file_action.triggered.connect(open_file)
+
+        save_file_action = QAction("Save...", self)
+        save_file_action.setShortcut("Ctrl+S")
+        save_file_action.triggered.connect(save_file)
+
+        save_as_file_action = QAction("Save as...", self)
+        save_as_file_action.setShortcut("Ctrl+Shift+S")
+        save_as_file_action.triggered.connect(save_file_as)
+
+        export_file_action = QAction("Export...", self)
+        export_file_action.setShortcut("Ctrl+E")
+        export_file_action.triggered.connect(export_file)
+
+        file_menu = QMenu("File", self)
+        file_menu.addAction(new_file_action)
+        file_menu.addSeparator()
+        file_menu.addAction(open_file_action)
+        file_menu.addAction(save_file_action)
+        file_menu.addAction(save_as_file_action)
+        file_menu.addSeparator()
+        file_menu.addAction(export_file_action)
+
+        menu_bar = QMenuBar(self)
+        menu_bar.addMenu(file_menu)
+        self.layout().setMenuBar(menu_bar)
+
     def update_image(self, data):
         """
-        Updates the image of the webcam video.
+        Updates the virtual drawing board with its content.
 
         :param data: The image data (image, height of the image, width of the image).
         """
