@@ -2,14 +2,13 @@
 Virtual Drawing Board
 
 This program allows the user to draw on the virtual drawing board by painting
-in the air with his index finger.
+in the air when pinching the index finger and thumb together.
 
 The MediaPipe Hands module is used to detect the position of the index
-fingertip from the webcam input.
+fingertip and thumb tip from the webcam input.
 
 The OpenCV library is used to edit the webcam snapshot and draw the lines on
-the virtual drawing board based on the previously detected indexfinger tip
-positions.
+the virtual drawing board based on the previously detected positions.
 
 It is required that 'opencv-python', 'mediapipe' and 'PyQt6' are installed.
 
@@ -20,12 +19,32 @@ from pathlib import Path
 
 import cv2
 import mediapipe as mp
+import numpy as np
 from PyQt6 import QtGui
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtWidgets import QWidget, QFileDialog
+from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox
 
 from settings import *
+
+
+def generate_whiteboard(width, height):
+    """
+    Generates a whiteboard with the size of the webcam snapshot.
+
+    :param width: Width of the whiteboard.
+    :param height: Height of the whiteboard.
+    :return: Whiteboard.
+    """
+
+    dark_color = 31
+    light_color = 255
+
+    board = np.zeros([height, width, 1], dtype=np.uint8)
+    board.fill(dark_color if darkdetect.isDark() else light_color)
+    board = cv2.cvtColor(board, cv2.COLOR_GRAY2RGB)
+
+    return board
 
 
 class VideoThread(QThread):
@@ -33,12 +52,12 @@ class VideoThread(QThread):
     Video Thread
 
     This class is used to create a thread, which is used to detect the index
-    fingertip position from the webcam input and draw the lines on the virtual
-    drawing board.
+    fingertip position and the thumb tip position from the webcam input and draw
+    the lines on the virtual drawing board.
 
-    There is as well a circle around the active index fingertip, which is used
-    to indicate the position of the index fingertip, with wich the user can
-    draw.
+    There is as well a dot in the center between the index fingertip and
+    the thumb tip, which is used to indicate the position where the lines
+    will be drawn.
 
     Also, the thread contains the logic methods for the different options
     (listed in the description of the MainWindow class), and emits a signal
@@ -47,7 +66,7 @@ class VideoThread(QThread):
 
     Attributes
     ----------
-    signal : pyqtSignal
+    data_signal : pyqtSignal
         Signal, which is emitted when the thread is running and the webcam
         snapshot is edited.
 
@@ -57,18 +76,19 @@ class VideoThread(QThread):
         Initializes the video thread.
     run()
         Runs as long as the thread is running. In this method, the logic for
-        detecting the index fingertip position, editing the webcam snapshot,
-        and emitting the signal is implemented.
-    check_if_index_finger_is_up(landmarks) -> bool
-        Checks if the index finger is up.
+        detecting the index fingertip position and the thumb tip position,
+        editing the webcam snapshot, and emitting the signal is implemented.
+    check_if_pinched(landmarks) -> bool
+        Checks if the index fingertip and the thumb tip are pinched together.
     get_coordinates(landmarks, image_width, image_height) -> tuple
-        Returns the coordinates of the index fingertip.
+        Returns the coordinates of the center between the index fingertip and
+        the thumb tip.
     add_line(x, y)
         Adds a new line to the list of lines.
     draw_lines(image)
         Draws the lines stored in the list of lines on the webcam snapshot.
-    draw_circle(image, x, y)
-        Draws a circle around the active index fingertip.
+    draw_indicator(image, x, y)
+        Draws an indicator between the index fingertip and the thumb tip.
     emit_signal(image)
         Emits the signal with the edited webcam snapshot.
     toggle_draw()
@@ -86,7 +106,8 @@ class VideoThread(QThread):
         Stops the video thread.
     """
 
-    signal = pyqtSignal(list)
+    data_signal = pyqtSignal(list)
+    error_signal = pyqtSignal(str)
 
     def __init__(self):
         """
@@ -98,7 +119,10 @@ class VideoThread(QThread):
         self.video = cv2.VideoCapture(0)
         self.mp_hands = mp.solutions.hands
         self.index_finger_tip = self.mp_hands.HandLandmark.INDEX_FINGER_TIP
+        self.thumb_tip = self.mp_hands.HandLandmark.THUMB_TIP
+        self.pinch_tolerance = 0.05
         self.lines = [[]]
+        self.indicator_color = (150, 150, 150)
         self.draw = True
         self.board = None
 
@@ -112,52 +136,73 @@ class VideoThread(QThread):
         with self.mp_hands.Hands(max_num_hands=1) as hands:
             while self.run_video_thread:
                 success, image = self.video.read()
+
+                if not success:
+                    error_message = "Unable to receive webcam input.\nCheck if the webcam is connected properly."
+                    self.error_signal.emit(error_message)
+                    break
+
                 image_height, image_width, _ = image.shape
-                result = hands.process(image).multi_hand_landmarks
-                if result:
-                    landmarks = result[0].landmark
-                    is_index_finger_up = self.check_if_index_finger_is_up(landmarks)
-                    if is_index_finger_up:
-                        x, y = self.get_coordinates(landmarks, image_width, image_height)
-                        if self.draw:
-                            self.add_line(x, y)
+                results = hands.process(image).multi_hand_landmarks
+
+                if results:
+                    landmarks = results[0].landmark
+                    x, y = self.get_coordinates(landmarks, image_width, image_height)
+                    is_pinched = self.check_if_pinched(landmarks)
+
+                    if self.draw and is_pinched:
+                        self.add_line(x, y)
                 else:
                     self.check_for_new_line()
-                self.draw_lines(image)
-                self.board = cv2.flip(image, 1)
-                if result and is_index_finger_up:
-                    self.draw_circle(image, x, y)
-                if success:
-                    self.emit_signal(image, image_height, image_width)
+
+                board = generate_whiteboard(image_width, image_height)
+                board = self.draw_lines(board)
+                self.board = cv2.flip(board, 1)
+
+                if results and self.draw and not is_pinched:
+                    board = self.draw_indicator(board, x, y)
+
+                self.emit_data_signal(board, image_height, image_width)
+
         self.video.release()
 
-    def check_if_index_finger_is_up(self, landmarks) -> bool:
+    def check_if_pinched(self, landmarks):
         """
-        Checks if the index finger is up.
+        Checks if the index fingertip and the thumb tip are pinched.
 
-        :param landmarks: List of landmarks of the index finger.
-        :return: True if the index finger is up, False otherwise.
+        :param landmarks: List of hand landmarks.
+        :return: True if the index fingertip and the thumb tip are pinched, False otherwise.
         """
 
-        for landmark in landmarks:
-            if landmark.y >= landmarks[self.index_finger_tip].y:
-                continue
-            self.check_for_new_line()
-            return False
-        return True
+        ift = landmarks[self.index_finger_tip]
+        tt = landmarks[self.thumb_tip]
 
-    def get_coordinates(self, landmarks, image_width, image_height) -> tuple[int, int]:
+        if abs(ift.x - tt.x) < self.pinch_tolerance and abs(ift.y - tt.y) < self.pinch_tolerance:
+            return True
+
+        self.check_for_new_line()
+
+        return False
+
+    def get_coordinates(self, landmarks, image_width, image_height):
         """
-        Returns the coordinates of the index fingertip.
+        Returns the coordinates of the center between the index fingertip and the thumb tip.
 
-        :param landmarks: List of landmarks of the index finger.
+        :param landmarks: List of hand landmarks.
         :param image_width: Width of the webcam snapshot.
         :param image_height: Height of the webcam snapshot.
-        :return: Tuple of the x and y coordinates of the index fingertip.
+        :return: Tuple of the x and y coordinates of the center between the index fingertip and the thumb tip.
         """
 
-        x = int(landmarks[self.index_finger_tip].x * image_width)
-        y = int(landmarks[self.index_finger_tip].y * image_height)
+        ift = landmarks[self.index_finger_tip]
+        tt = landmarks[self.thumb_tip]
+
+        center_x = (ift.x + tt.x) / 2
+        center_y = (ift.y + tt.y) / 2
+
+        x = int(center_x * image_width)
+        y = int(center_y * image_height)
+
         return x, y
 
     def add_line(self, x, y):
@@ -181,10 +226,15 @@ class VideoThread(QThread):
             for i in range(len(line)):
                 if i == 0:
                     continue
-                cv2.line(image, line[i - 1][0], line[i][0], tuple(reversed(line[i - 1][2])), line[i - 1][1])
+                old_position = line[i - 1][0]
+                new_position = line[i][0]
+                color = tuple(reversed(line[i - 1][2]))
+                thickness = line[i - 1][1]
+                image = cv2.line(image, old_position, new_position, color, thickness)
 
-    @staticmethod
-    def draw_circle(image, x, y):
+        return image
+
+    def draw_indicator(self, image, x, y):
         """
         Draws a circle around the active index fingertip.
 
@@ -193,9 +243,13 @@ class VideoThread(QThread):
         :param y: Y coordinate of the index fingertip.
         """
 
-        cv2.circle(image, (x, y), 50, tuple(reversed(settings.line_color)), 10)
+        radius = int(settings.line_thickness / 2)
+        color = tuple(reversed(self.indicator_color))
+        thickness = -1
 
-    def emit_signal(self, image, image_height, image_width):
+        return cv2.circle(image, (x, y), radius, color, thickness)
+
+    def emit_data_signal(self, image, image_height, image_width):
         """
         Emits the signal with the edited webcam snapshot.
 
@@ -204,9 +258,11 @@ class VideoThread(QThread):
         :param image_width: Width of the webcam snapshot.
         """
 
-        self.signal.emit([cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB), image_height, image_width])
+        image = cv2.flip(image, 1)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        self.data_signal.emit([image, image_height, image_width])
 
-    def toggle_draw(self, label: QLabel, button: QPushButton):
+    def toggle_draw(self, label, button):
         """
         Toggle whether the lines should be drawn on the webcam snapshot or not.
 
@@ -256,6 +312,7 @@ class VideoThread(QThread):
             f"{str(Path.home())}/Documents/Drawing.png",
             "Image (*.png *.jpg *.jpeg)"
         )
+
         if path:
             cv2.imwrite(path, image)
 
@@ -284,12 +341,16 @@ class MainWindow(QWidget):
     -------
     init()
         Initializes the main window.
+    initialize_video_thread()
+        Initializes the video thread.
     create_layout()
         Creates the layout of the main window.
     create_options_layout()
         Creates the layout for the options.
     update_image(image, image_height, image_width)
         Updates the image of the webcam video.
+    handle_video_thread_errors(error)
+        Handles errors that occur in the video thread.
     closeEvent(event)
         Closes the application.
     """
@@ -307,8 +368,16 @@ class MainWindow(QWidget):
         self.video = QLabel()
         self.video.resize(self.display_width, self.display_height)
         self.create_layout()
+        self.initialize_video_thread()
+
+    def initialize_video_thread(self):
+        """
+        Initializes the video thread.
+        """
+
         self.thread = VideoThread()
-        self.thread.signal.connect(self.update_image)
+        self.thread.data_signal.connect(self.update_image)
+        self.thread.error_signal.connect(self.handle_video_thread_errors)
         self.thread.start()
 
     def create_layout(self):
@@ -332,7 +401,7 @@ class MainWindow(QWidget):
 
         self.setLayout(view)
 
-    def create_options_layout(self) -> QHBoxLayout:
+    def create_options_layout(self):
         """
         Creates the layout for the options.
 
@@ -369,6 +438,7 @@ class MainWindow(QWidget):
             buttons[i].setFixedWidth(80)
             buttons[i].setFocusPolicy(Qt.FocusPolicy.NoFocus)
             options_layout.addWidget(buttons[i])
+
             if i % 2 == 0 and i != len(buttons) - 1:
                 options_layout.addStretch()
 
@@ -382,9 +452,30 @@ class MainWindow(QWidget):
         """
 
         image, image_height, image_width = data
-        image = QtGui.QImage(image.data, image_width, image_height, QtGui.QImage.Format.Format_RGB888).scaled(
-            self.display_width, self.display_height, Qt.AspectRatioMode.KeepAspectRatio)
+        image = QtGui.QImage(image.data, image_width, image_height, QtGui.QImage.Format.Format_RGB888) \
+            .scaled(self.display_width, self.display_height, Qt.AspectRatioMode.KeepAspectRatio)
         self.video.setPixmap(QPixmap.fromImage(image))
+
+    def handle_video_thread_errors(self, error):
+        """
+        Handles errors that occur in the video thread.
+
+        :param error: The error message.
+        """
+
+        action = QMessageBox.critical(
+            self,
+            "Error",
+            error,
+            buttons=QMessageBox.StandardButton.Close | QMessageBox.StandardButton.Retry,
+            defaultButton=QMessageBox.StandardButton.Retry,
+        )
+
+        match action:
+            case QMessageBox.StandardButton.Close:
+                self.close()
+            case QMessageBox.StandardButton.Retry:
+                self.initialize_video_thread()
 
     def closeEvent(self, event):
         """

@@ -19,6 +19,7 @@ mp_hands = mp.solutions.hands
 
 # For webcam input:
 video = cv2.VideoCapture(0)
+
 with mp_hands.Hands() as hands:
     while video.isOpened():
 
@@ -41,4 +42,5 @@ with mp_hands.Hands() as hands:
         # terminate if the escape key is pressed
         if cv2.waitKey(1) == KEYCODE_ESC:
             break
+
 video.release()

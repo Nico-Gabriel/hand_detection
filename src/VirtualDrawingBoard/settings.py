@@ -13,6 +13,7 @@ Author: Nico-Gabriel Ruckendorfer
 
 import sys
 
+import darkdetect
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QApplication, QDialog, QColorDialog, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QPushButton
@@ -56,7 +57,7 @@ class SettingsWindow(QDialog):
         self.move(self.geometry().topLeft())
         self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
         self.line_thickness = 10
-        self.line_color = (255, 0, 0)
+        self.line_color = (255, 255, 255) if darkdetect.isDark() else (0, 0, 0)
         self.create_layout()
 
     def create_layout(self):
@@ -72,7 +73,7 @@ class SettingsWindow(QDialog):
         layout.addLayout(self.create_line_color_layout())
         self.setLayout(layout)
 
-    def create_line_thickness_layout(self) -> QVBoxLayout:
+    def create_line_thickness_layout(self):
         """
         Creates the layout for the line thickness settings.
 
@@ -103,7 +104,7 @@ class SettingsWindow(QDialog):
 
         return lt_layout
 
-    def create_line_color_layout(self) -> QVBoxLayout:
+    def create_line_color_layout(self):
         """
         Creates the layout for the line color settings.
 
@@ -130,7 +131,7 @@ class SettingsWindow(QDialog):
 
         return lc_layout
 
-    def change_line_thickness(self, label: QLabel, value: int):
+    def change_line_thickness(self, label, value):
         """
         Changes the line thickness of the lines drawn on the virtual drawing board.
 
@@ -141,7 +142,7 @@ class SettingsWindow(QDialog):
         self.line_thickness = value
         label.setText(f"{self.line_thickness}")
 
-    def change_line_color(self, label: QLabel):
+    def change_line_color(self, label):
         """
         Changes the line color of the lines drawn on the virtual drawing board.
 
@@ -151,6 +152,7 @@ class SettingsWindow(QDialog):
         """
 
         color = QColorDialog().getColor()
+
         if color.isValid():
             self.line_color = (color.red(), color.green(), color.blue())
             label.setStyleSheet(f"color: rgb{self.line_color}; font-size: 24px")

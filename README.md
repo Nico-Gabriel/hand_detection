@@ -50,10 +50,9 @@ pip install PyQt6
 
 ![OpenCV logo](assets/opencv.png)
 
-In this project, OpenCV is used to capture the video stream from the webcam and to display it in the virtual drawing 
-board application. 
-Additionally, OpenCV is used for image manipulation, to draw the lines as well as the circle (that is needed to 
-indicate the active index finger to draw) on the current frame.
+In this project, OpenCV is used to capture the video stream from the webcam and for image manipulation to draw the
+lines and the indicator (which is needed to see where the line will be drawn) on the current frame, which are then 
+displayed on a white layer in the virtual drawing board application.
 
 Links:
 
@@ -66,8 +65,8 @@ For more information about OpenCV, visit the [official website](https://opencv.o
 
 ![MediaPipe logo](assets/mediapipe.png)
 
-In this project, MediaPipe is used to detect the hand landmarks, wich are needed to get the position of the active 
-index finger to draw.
+In this project, MediaPipe is used to detect the hand landmarks, wich are needed to get the position of the index 
+fingertip and thumb tip to draw.
 
 Links:
 
