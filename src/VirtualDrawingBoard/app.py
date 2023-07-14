@@ -28,26 +28,6 @@ from PyQt6.QtWidgets import QWidget, QFileDialog, QMessageBox, QMenu, QMenuBar
 from settings import *
 
 
-def new_file():
-    print("New...")
-
-
-def open_file():
-    print("Open...")
-
-
-def save_file():
-    print("Save...")
-
-
-def save_file_as():
-    print("Save as...")
-
-
-def export_file():
-    print("Export...")
-
-
 def generate_whiteboard(width, height):
     """
     Generates a whiteboard with the size of the webcam snapshot.
@@ -122,8 +102,8 @@ class VideoThread(QThread):
         Removes all lines from the list of lines.
     check_for_new_line()
         Checks if a new line should be added to the list of lines.
-    save()
-        Save the current snapshot of the virtual drawing board as an image
+    export_file()
+        Export the current snapshot of the virtual drawing board as an image
         (*.png, *.jpg, *.jpeg) to the chosen path.
     stop()
         Stops the video thread.
@@ -266,7 +246,8 @@ class VideoThread(QThread):
         :param y: Y coordinate of the index fingertip.
         """
 
-        radius = int(settings.line_thickness / 2)
+        min_radius = 5
+        radius = max(min_radius, int(settings.line_thickness / 2))
         color = tuple(reversed(self.indicator_color))
         thickness = -1
 
@@ -322,22 +303,33 @@ class VideoThread(QThread):
         if self.lines[len(self.lines) - 1]:
             self.lines.append([])
 
-    def save(self):
+    def new_file(self):
+        pass
+
+    def open_file(self):
+        pass
+
+    def save_file(self):
+        pass
+
+    def save_file_as(self):
+        pass
+
+    def export_file(self):
         """
-        Save the current snapshot of the virtual drawing board as an image
+        Export the current snapshot of the virtual drawing board as an image
         (*.png, *.jpg, *.jpeg) to the chosen path.
         """
 
-        image = self.board
         path, _ = QFileDialog.getSaveFileName(
             None,
-            "Save Image",
+            "Export Image",
             f"{str(Path.home())}/Documents/Drawing.png",
             "Image (*.png *.jpg *.jpeg)"
         )
 
         if path:
-            cv2.imwrite(path, image)
+            cv2.imwrite(path, self.board)
 
     def stop(self):
         """
@@ -358,7 +350,6 @@ class MainWindow(QWidget):
     - Undo
     - Clear
     - Settings
-    - Save
 
     Methods
     -------
@@ -440,34 +431,33 @@ class MainWindow(QWidget):
         drawing_label.setFixedWidth(134)
 
         drawing_button = QPushButton("Disable")
+        drawing_button.setFixedWidth(80)
+        drawing_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         drawing_button.clicked.connect(lambda: self.thread.toggle_draw(drawing_label, drawing_button))
 
         undo_button = QPushButton("Undo")
+        undo_button.setFixedWidth(80)
+        undo_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         undo_button.clicked.connect(lambda: self.thread.undo())
 
         clear_button = QPushButton("Clear")
+        clear_button.setFixedWidth(80)
+        clear_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         clear_button.clicked.connect(lambda: self.thread.clear())
 
         settings_button = QPushButton("Settings")
+        settings_button.setFixedWidth(80)
+        settings_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         settings_button.clicked.connect(lambda: settings.show())
-
-        save_button = QPushButton("Save")
-        save_button.clicked.connect(lambda: self.thread.save())
-
-        buttons = [drawing_button, undo_button, clear_button, settings_button, save_button]
 
         options_layout = QHBoxLayout()
         options_layout.addWidget(drawing_label)
-
-        # Shorter way to add the buttons to the layout with the set properties
-        # and a stretch inbetween.
-        for i in range(len(buttons)):
-            buttons[i].setFixedWidth(80)
-            buttons[i].setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            options_layout.addWidget(buttons[i])
-
-            if i % 2 == 0 and i != len(buttons) - 1:
-                options_layout.addStretch()
+        options_layout.addWidget(drawing_button)
+        options_layout.addStretch(8)
+        options_layout.addWidget(undo_button)
+        options_layout.addWidget(clear_button)
+        options_layout.addStretch(12)
+        options_layout.addWidget(settings_button)
 
         return options_layout
 
@@ -478,23 +468,23 @@ class MainWindow(QWidget):
 
         new_file_action = QAction("New...", self)
         new_file_action.setShortcut("Ctrl+N")
-        new_file_action.triggered.connect(new_file)
+        new_file_action.triggered.connect(lambda: self.thread.new_file())
 
         open_file_action = QAction("Open...", self)
         open_file_action.setShortcut("Ctrl+O")
-        open_file_action.triggered.connect(open_file)
+        open_file_action.triggered.connect(lambda: self.thread.open_file())
 
         save_file_action = QAction("Save...", self)
         save_file_action.setShortcut("Ctrl+S")
-        save_file_action.triggered.connect(save_file)
+        save_file_action.triggered.connect(lambda: self.thread.save_file())
 
         save_as_file_action = QAction("Save as...", self)
         save_as_file_action.setShortcut("Ctrl+Shift+S")
-        save_as_file_action.triggered.connect(save_file_as)
+        save_as_file_action.triggered.connect(lambda: self.thread.save_file_as())
 
         export_file_action = QAction("Export...", self)
         export_file_action.setShortcut("Ctrl+E")
-        export_file_action.triggered.connect(export_file)
+        export_file_action.triggered.connect(lambda: self.thread.export_file())
 
         file_menu = QMenu("File", self)
         file_menu.addAction(new_file_action)

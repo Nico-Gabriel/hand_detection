@@ -73,3 +73,8 @@ Links:
 - [Hand landmarks in MediaPipe](https://google.github.io/mediapipe/solutions/hands.html)
 
 For more information about MediaPipe, visit the [official website](https://mediapipe.dev/).
+
+
+## License
+
+This project is free software, and may be redistributed under the [MIT-LICENSE](LICENSE).
