@@ -77,4 +77,4 @@ For more information about MediaPipe, visit the [official website](https://media
 
 ## License
 
-This project is free software, and may be redistributed under the [MIT-LICENSE](LICENSE).
+This project is free software and may be redistributed under the [MIT-LICENSE](LICENSE).
